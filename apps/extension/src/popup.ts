@@ -1,4 +1,5 @@
 import type { ExtensionStatus, PopupMessage } from "./messages";
+import type { ActivityEvent } from "./protocol";
 
 const DEFAULT_SERVER_URL = "ws://localhost:8787";
 
@@ -10,17 +11,23 @@ const joinButton = button("join");
 const leaveButton = button("leave");
 const copyButton = button("copy-code");
 const roomCodeInput = input("room-code");
+const nicknameInput = input("nickname");
 const serverUrlInput = input("server-url");
 const playerStatus = element("player-status");
 const participantCount = element("participant-count");
 const roleDescription = element("role-description");
+const participantList = element("participant-list");
+const historyPanel = element("history-panel");
+const historyList = element("history") as HTMLOListElement;
+const historyCount = element("history-count");
 const error = element("error");
 
 let activeTabId: number | null = null;
 
 async function initialize(): Promise<void> {
-  const stored = await chrome.storage.local.get("serverUrl");
+  const stored = await chrome.storage.local.get(["serverUrl", "nickname"]);
   serverUrlInput.value = typeof stored.serverUrl === "string" ? stored.serverUrl : DEFAULT_SERVER_URL;
+  nicknameInput.value = typeof stored.nickname === "string" ? stored.nickname : "";
 
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   activeTabId = tab?.id ?? null;
@@ -32,7 +39,10 @@ async function initialize(): Promise<void> {
       connection: "disconnected",
       roomCode: null,
       role: null,
+      clientId: null,
       participantCount: 0,
+      participants: [],
+      history: [],
       error: null,
     });
     return;
@@ -47,14 +57,19 @@ async function initialize(): Promise<void> {
       connection: "disconnected",
       roomCode: null,
       role: null,
+      clientId: null,
       participantCount: 0,
+      participants: [],
+      history: [],
       error: "Odśwież kartę Crunchyroll po zainstalowaniu rozszerzenia.",
     });
   }
 }
 
 createButton.addEventListener("click", async () => {
-  await runAction({ type: "create_room", serverUrl: await saveServerUrl() });
+  const nickname = await saveNickname();
+  if (!nickname) return;
+  await runAction({ type: "create_room", serverUrl: await saveServerUrl(), nickname });
 });
 
 joinButton.addEventListener("click", async () => {
@@ -63,7 +78,9 @@ joinButton.addEventListener("click", async () => {
     showError("Wpisz sześciocyfrowy kod pokoju.");
     return;
   }
-  await runAction({ type: "join_room", serverUrl: await saveServerUrl(), roomCode });
+  const nickname = await saveNickname();
+  if (!nickname) return;
+  await runAction({ type: "join_room", serverUrl: await saveServerUrl(), roomCode, nickname });
 });
 
 roomCodeInput.addEventListener("input", () => {
@@ -113,6 +130,17 @@ async function saveServerUrl(): Promise<string> {
   return value;
 }
 
+async function saveNickname(): Promise<string | null> {
+  const nickname = nicknameInput.value.trim();
+  if (nickname.length < 2 || nickname.length > 20) {
+    showError("Nick musi mieć od 2 do 20 znaków.");
+    nicknameInput.focus();
+    return null;
+  }
+  await chrome.storage.local.set({ nickname });
+  return nickname;
+}
+
 function render(status: ExtensionStatus): void {
   unsupported.classList.toggle("hidden", status.supported);
   disconnected.classList.toggle("hidden", !status.supported || status.connection === "connected");
@@ -125,9 +153,72 @@ function render(status: ExtensionStatus): void {
   roleDescription.textContent = status.role === "host"
     ? "Jesteś hostem. Zamknięcie karty zakończy pokój."
     : "Sterowanie odtwarzaniem działa w obie strony.";
+  participantList.replaceChildren(...status.participants.map((participant) => {
+    const chip = document.createElement("span");
+    chip.className = `participant-chip${participant.clientId === status.clientId ? " self" : ""}`;
+    chip.textContent = participant.clientId === status.clientId
+      ? `${participant.nickname} (Ty)`
+      : participant.nickname;
+    return chip;
+  }));
+  renderHistory(status.history);
   createButton.disabled = status.connection === "connecting";
   joinButton.disabled = status.connection === "connecting";
   showError(status.error);
+}
+
+function renderHistory(history: ActivityEvent[]): void {
+  historyPanel.classList.toggle("hidden", history.length === 0);
+  historyCount.textContent = `${history.length}/100`;
+  historyList.replaceChildren(...[...history].reverse().map((event) => {
+    const item = document.createElement("li");
+    const time = document.createElement("time");
+    time.dateTime = new Date(event.createdAt).toISOString();
+    time.textContent = new Intl.DateTimeFormat("pl", {
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(event.createdAt);
+
+    const description = document.createElement("span");
+    const actor = document.createElement("strong");
+    actor.textContent = event.nickname;
+    const detail = document.createElement("span");
+    detail.className = "detail";
+    detail.textContent = ` ${activityDescription(event)}`;
+    description.append(actor, detail);
+    item.append(time, description);
+    return item;
+  }));
+}
+
+function activityDescription(event: ActivityEvent): string {
+  switch (event.type) {
+    case "participant_joined":
+      return "dołączył(a) do pokoju";
+    case "participant_left":
+      return "opuścił(a) pokój";
+    case "playback":
+      switch (event.action) {
+        case "play": return `wznowił(a) od ${formatTime(event.currentTime)}`;
+        case "pause": return `wstrzymał(a) na ${formatTime(event.currentTime)}`;
+        case "seek": return `przeskoczył(a) do ${formatTime(event.currentTime)}`;
+        case "rate": return `ustawił(a) prędkość ${formatRate(event.playbackRate)}×`;
+      }
+  }
+}
+
+function formatRate(rate: number): string {
+  return rate.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
+}
+
+function formatTime(totalSeconds: number): string {
+  const seconds = Math.max(0, Math.floor(totalSeconds));
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const remainder = seconds % 60;
+  return hours > 0
+    ? `${hours}:${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`
+    : `${minutes}:${String(remainder).padStart(2, "0")}`;
 }
 
 function showError(message: string | null): void {

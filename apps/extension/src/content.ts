@@ -1,5 +1,5 @@
 import type { ExtensionStatus, PopupMessage } from "./messages";
-import type { PlaybackAction, PlaybackState, ServerMessage } from "./protocol";
+import type { ActivityEvent, PlaybackAction, PlaybackState, ServerMessage } from "./protocol";
 
 const status: ExtensionStatus = {
   supported: true,
@@ -7,7 +7,10 @@ const status: ExtensionStatus = {
   connection: "disconnected",
   roomCode: null,
   role: null,
+  clientId: null,
   participantCount: 0,
+  participants: [],
+  history: [],
   error: null,
 };
 
@@ -24,11 +27,15 @@ chrome.runtime.onMessage.addListener((message: PopupMessage, _sender, sendRespon
       sendResponse(status);
       break;
     case "create_room":
-      connect(message.serverUrl, { type: "create_room" });
+      connect(message.serverUrl, { type: "create_room", nickname: message.nickname });
       sendResponse({ ok: true });
       break;
     case "join_room":
-      connect(message.serverUrl, { type: "join_room", roomCode: message.roomCode });
+      connect(message.serverUrl, {
+        type: "join_room",
+        roomCode: message.roomCode,
+        nickname: message.nickname,
+      });
       sendResponse({ ok: true });
       break;
     case "leave_room":
@@ -43,6 +50,7 @@ function connect(serverUrl: string, initialMessage: object): void {
   closeSocket(false);
   status.connection = "connecting";
   status.error = null;
+  status.history = [];
   notifyStatus();
 
   try {
@@ -80,14 +88,33 @@ function handleServerMessage(message: ServerMessage): void {
       status.connection = "connected";
       status.roomCode = message.roomCode;
       status.role = message.role;
+      status.clientId = message.clientId;
       status.participantCount = message.participantCount;
+      status.participants = message.participants;
+      status.history = message.history;
       status.error = null;
       if (message.state) applyPlayback(message.state, "sync");
       startHeartbeat();
       notifyStatus();
       break;
-    case "participant_count":
-      status.participantCount = message.participantCount;
+    case "participants":
+      status.participants = message.participants;
+      status.participantCount = message.participants.length;
+      notifyStatus();
+      break;
+    case "activity":
+      addActivity(message.event);
+      if (
+        message.event.actorClientId !== status.clientId &&
+        (message.event.type === "participant_joined" || message.event.type === "participant_left")
+      ) {
+        showToast(
+          message.event.type === "participant_joined"
+            ? `${message.event.nickname} dołączył(a) do pokoju`
+            : `${message.event.nickname} opuścił(a) pokój`,
+          message.event.type,
+        );
+      }
       notifyStatus();
       break;
     case "playback":
@@ -207,7 +234,9 @@ function closeSocket(clearError: boolean): void {
   status.connection = "disconnected";
   status.roomCode = null;
   status.role = null;
+  status.clientId = null;
   status.participantCount = 0;
+  status.participants = [];
   if (clearError) status.error = null;
   notifyStatus();
 }
@@ -216,7 +245,9 @@ function setDisconnected(error: string): void {
   status.connection = "disconnected";
   status.roomCode = null;
   status.role = null;
+  status.clientId = null;
   status.participantCount = 0;
+  status.participants = [];
   status.error = error;
   stopHeartbeat();
   notifyStatus();
@@ -235,6 +266,59 @@ function parseServerMessage(raw: unknown): ServerMessage | null {
     // Ignore malformed data from a non-compatible server.
   }
   return null;
+}
+
+function addActivity(event: ActivityEvent): void {
+  if (status.history.some((existing) => existing.id === event.id)) return;
+  status.history = [...status.history, event].slice(-100);
+}
+
+function showToast(
+  message: string,
+  type: "participant_joined" | "participant_left",
+): void {
+  const hostId = "watchgether-notifications";
+  let host = document.getElementById(hostId);
+  if (!host) {
+    host = document.createElement("div");
+    host.id = hostId;
+    Object.assign(host.style, {
+      position: "fixed",
+      top: "24px",
+      right: "24px",
+      zIndex: "2147483647",
+      display: "flex",
+      flexDirection: "column",
+      gap: "10px",
+      pointerEvents: "none",
+    });
+    document.documentElement.append(host);
+  }
+
+  const toast = document.createElement("div");
+  toast.textContent = message;
+  Object.assign(toast.style, {
+    padding: "12px 16px",
+    border: `1px solid ${type === "participant_joined" ? "#3f9466" : "#73505a"}`,
+    borderRadius: "12px",
+    color: "#fff",
+    background: "rgba(24, 20, 28, .96)",
+    boxShadow: "0 12px 32px rgba(0,0,0,.35)",
+    font: "600 14px/1.35 system-ui, sans-serif",
+    opacity: "0",
+    transform: "translateY(-8px)",
+    transition: "opacity .18s ease, transform .18s ease",
+  });
+  host.append(toast);
+  requestAnimationFrame(() => {
+    toast.style.opacity = "1";
+    toast.style.transform = "translateY(0)";
+  });
+  window.setTimeout(() => {
+    toast.style.opacity = "0";
+    toast.style.transform = "translateY(-8px)";
+    window.setTimeout(() => toast.remove(), 200);
+  }, 3_500);
 }
 
 function findVideo(root: Document | ShadowRoot = document): HTMLVideoElement | null {

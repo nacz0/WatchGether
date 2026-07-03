@@ -1,6 +1,6 @@
 # WatchGether
 
-Minimalne rozszerzenie Chrome synchronizujące odtwarzanie Crunchyrolla między dwiema osobami. Synchronizowane są: odtwarzanie, pauza, przewijanie i prędkość. Obie osoby mogą sterować odtwarzaczem, a host co 3 sekundy koryguje dryf.
+Minimalne rozszerzenie Chrome synchronizujące odtwarzanie Crunchyrolla między dwiema osobami. Synchronizowane są: odtwarzanie, pauza, przewijanie i prędkość. Obie osoby mogą sterować odtwarzaczem, a host co 3 sekundy koryguje dryf. Uczestnicy mają nicki, dostają powiadomienia o dołączeniu i wyjściu oraz widzą historię aktywności pokoju.
 
 ## Architektura
 
@@ -8,6 +8,7 @@ Minimalne rozszerzenie Chrome synchronizujące odtwarzanie Crunchyrolla między 
 - `apps/server` — serwer HTTP/WebSocket w Node.js;
 - pokój ma losowy, sześciocyfrowy kod i maksymalnie dwóch uczestników;
 - stan pokoju istnieje w pamięci serwera. Restart serwera lub wyjście hosta zamyka pokój.
+- historia obejmuje maksymalnie 100 ostatnich zdarzeń i znika wraz z pokojem.
 
 Serwer nie przesyła obrazu ani danych logowania. Każdy uczestnik ogląda materiał ze swojego konta Crunchyroll.
 

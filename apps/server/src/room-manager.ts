@@ -1,7 +1,15 @@
-import type { PlaybackAction, PlaybackState, ServerMessage } from "./protocol.js";
+import { randomUUID } from "node:crypto";
+import type {
+  ActivityEvent,
+  Participant,
+  PlaybackAction,
+  PlaybackState,
+  ServerMessage,
+} from "./protocol.js";
 
 export interface ClientPeer {
   id: string;
+  nickname: string;
   send(message: ServerMessage): void;
 }
 
@@ -10,6 +18,7 @@ interface Room {
   hostId: string;
   clients: Map<string, ClientPeer>;
   state: PlaybackState | null;
+  history: ActivityEvent[];
 }
 
 const ROOM_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -18,28 +27,35 @@ export class RoomManager {
   private readonly rooms = new Map<string, Room>();
   private readonly clientRooms = new Map<string, string>();
 
-  create(client: ClientPeer): string {
+  create(client: ClientPeer, nickname: string): string {
     this.leave(client.id);
+    client.nickname = nickname;
     const code = this.uniqueCode();
     const room: Room = {
       code,
       hostId: client.id,
       clients: new Map([[client.id, client]]),
       state: null,
+      history: [],
     };
+    const joinedEvent = this.participantEvent("participant_joined", client);
+    room.history.push(joinedEvent);
     this.rooms.set(code, room);
     this.clientRooms.set(client.id, code);
     client.send({
       type: "room_joined",
       roomCode: code,
       role: "host",
+      clientId: client.id,
       participantCount: 1,
+      participants: this.participants(room),
+      history: [...room.history],
       state: null,
     });
     return code;
   }
 
-  join(client: ClientPeer, requestedCode: string): boolean {
+  join(client: ClientPeer, requestedCode: string, nickname: string): boolean {
     const code = requestedCode.trim().toUpperCase();
     const room = this.rooms.get(code);
     if (!room) {
@@ -52,16 +68,23 @@ export class RoomManager {
     }
 
     this.leave(client.id);
+    client.nickname = nickname;
     room.clients.set(client.id, client);
     this.clientRooms.set(client.id, room.code);
+    const joinedEvent = this.participantEvent("participant_joined", client);
+    this.addHistory(room, joinedEvent);
     client.send({
       type: "room_joined",
       roomCode: room.code,
       role: room.hostId === client.id ? "host" : "guest",
+      clientId: client.id,
       participantCount: room.clients.size,
+      participants: this.participants(room),
+      history: [...room.history],
       state: this.projectState(room.state),
     });
-    this.broadcast(room, { type: "participant_count", participantCount: room.clients.size });
+    this.broadcast(room, { type: "participants", participants: this.participants(room) });
+    this.broadcast(room, { type: "activity", event: joinedEvent });
     return true;
   }
 
@@ -81,6 +104,23 @@ export class RoomManager {
     };
     room.state = state;
     this.broadcast(room, { type: "playback", action, state, originClientId: clientId });
+    if (action !== "sync") {
+      const client = room.clients.get(clientId);
+      if (client) {
+        const event: ActivityEvent = {
+          id: randomUUID(),
+          type: "playback",
+          actorClientId: client.id,
+          nickname: client.nickname,
+          action,
+          currentTime: state.currentTime,
+          playbackRate: state.playbackRate,
+          createdAt: state.updatedAt,
+        };
+        this.addHistory(room, event);
+        this.broadcast(room, { type: "activity", event });
+      }
+    }
     return true;
   }
 
@@ -91,7 +131,14 @@ export class RoomManager {
 
     const room = this.rooms.get(code);
     if (!room) return;
+    const leavingClient = room.clients.get(clientId);
     room.clients.delete(clientId);
+
+    if (leavingClient) {
+      const leftEvent = this.participantEvent("participant_left", leavingClient);
+      this.addHistory(room, leftEvent);
+      this.broadcast(room, { type: "activity", event: leftEvent });
+    }
 
     if (clientId === room.hostId) {
       this.broadcast(room, { type: "room_closed" });
@@ -103,7 +150,7 @@ export class RoomManager {
     if (room.clients.size === 0) {
       this.rooms.delete(code);
     } else {
-      this.broadcast(room, { type: "participant_count", participantCount: room.clients.size });
+      this.broadcast(room, { type: "participants", participants: this.participants(room) });
     }
   }
 
@@ -118,6 +165,28 @@ export class RoomManager {
 
   private broadcast(room: Room, message: ServerMessage): void {
     for (const client of room.clients.values()) client.send(message);
+  }
+
+  private participants(room: Room): Participant[] {
+    return [...room.clients.values()].map(({ id, nickname }) => ({ clientId: id, nickname }));
+  }
+
+  private participantEvent(
+    type: "participant_joined" | "participant_left",
+    client: ClientPeer,
+  ): ActivityEvent {
+    return {
+      id: randomUUID(),
+      type,
+      actorClientId: client.id,
+      nickname: client.nickname,
+      createdAt: Date.now(),
+    };
+  }
+
+  private addHistory(room: Room, event: ActivityEvent): void {
+    room.history.push(event);
+    if (room.history.length > 100) room.history.splice(0, room.history.length - 100);
   }
 
   private projectState(state: PlaybackState | null): PlaybackState | null {

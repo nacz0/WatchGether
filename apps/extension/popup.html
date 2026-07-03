@@ -23,6 +23,8 @@
 
       <section id="disconnected" class="panel hidden">
         <div id="player-status" class="status warning">Szukam odtwarzacza…</div>
+        <label for="nickname">Twój nick</label>
+        <input id="nickname" maxlength="20" autocomplete="nickname" placeholder="np. Natsu" />
         <button id="create" class="primary">Utwórz pokój</button>
         <div class="divider"><span>lub</span></div>
         <label for="room-code">Kod pokoju</label>
@@ -39,8 +41,17 @@
           <span class="dot"></span>
           <span id="participant-count">1 z 2 osób</span>
         </div>
+        <div id="participant-list" class="participant-list"></div>
         <p id="role-description" class="muted"></p>
         <button id="leave" class="danger">Opuść pokój</button>
+      </section>
+
+      <section id="history-panel" class="history-panel hidden">
+        <div class="history-heading">
+          <span class="eyebrow">Historia pokoju</span>
+          <span id="history-count"></span>
+        </div>
+        <ol id="history" class="history"></ol>
       </section>
 
       <p id="error" class="error hidden"></p>

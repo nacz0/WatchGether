@@ -30,6 +30,7 @@ wss.on("connection", (socket) => {
   const clientId = randomUUID();
   const peer = {
     id: clientId,
+    nickname: "Anonim",
     send(message: ServerMessage) {
       if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(message));
     },
@@ -44,10 +45,10 @@ wss.on("connection", (socket) => {
 
     switch (message.type) {
       case "create_room":
-        rooms.create(peer);
+        rooms.create(peer, message.nickname);
         break;
       case "join_room":
-        rooms.join(peer, message.roomCode);
+        rooms.join(peer, message.roomCode, message.nickname);
         break;
       case "playback":
         if (!rooms.updatePlayback(clientId, message.action, message)) {

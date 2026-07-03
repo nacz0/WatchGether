@@ -5,7 +5,7 @@ import { RoomManager, type ClientPeer } from "./room-manager.js";
 
 function peer(id: string): ClientPeer & { messages: ServerMessage[] } {
   const messages: ServerMessage[] = [];
-  return { id, messages, send: (message) => messages.push(message) };
+  return { id, nickname: "Anonim", messages, send: (message) => messages.push(message) };
 }
 
 test("creates a room and allows exactly one guest", () => {
@@ -13,11 +13,11 @@ test("creates a room and allows exactly one guest", () => {
   const host = peer("host");
   const guest = peer("guest");
   const third = peer("third");
-  const code = manager.create(host);
+  const code = manager.create(host, "Ala");
 
   assert.equal(code.length, 6);
-  assert.equal(manager.join(guest, code.toLowerCase()), true);
-  assert.equal(manager.join(third, code), false);
+  assert.equal(manager.join(guest, code.toLowerCase(), "Bartek"), true);
+  assert.equal(manager.join(third, code, "Celina"), false);
   assert.deepEqual(third.messages.at(-1), {
     type: "error",
     code: "ROOM_FULL",
@@ -29,8 +29,8 @@ test("broadcasts playback and closes the room when host leaves", () => {
   const manager = new RoomManager();
   const host = peer("host");
   const guest = peer("guest");
-  const code = manager.create(host);
-  manager.join(guest, code);
+  const code = manager.create(host, "Ala");
+  manager.join(guest, code, "Bartek");
 
   manager.updatePlayback("guest", "seek", {
     currentTime: 42,
@@ -45,4 +45,26 @@ test("broadcasts playback and closes the room when host leaves", () => {
   manager.leave("host");
   assert.equal(guest.messages.at(-1)?.type, "room_closed");
   assert.equal(manager.hasClient("guest"), false);
+});
+
+test("stores named join, playback and leave activities without sync noise", () => {
+  const manager = new RoomManager();
+  const host = peer("host");
+  const guest = peer("guest");
+  const code = manager.create(host, "Ala");
+  manager.join(guest, code, "Bartek");
+
+  manager.updatePlayback("guest", "play", { currentTime: 12, paused: false, playbackRate: 1 });
+  manager.updatePlayback("host", "sync", { currentTime: 14, paused: false, playbackRate: 1 });
+  manager.leave("guest");
+
+  const activities = host.messages
+    .filter((message) => message.type === "activity")
+    .map((message) => message.type === "activity" ? message.event : null);
+  assert.deepEqual(activities.map((event) => event?.type), [
+    "participant_joined",
+    "playback",
+    "participant_left",
+  ]);
+  assert.equal(activities[1]?.nickname, "Bartek");
 });

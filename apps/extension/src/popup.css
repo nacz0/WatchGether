@@ -62,6 +62,7 @@ button:not(.room-code) {
 button:hover { filter: brightness(1.1); }
 button:disabled { cursor: wait; opacity: 0.6; }
 button.primary { width: 100%; border-color: #f47521; color: #1b1110; background: #f47521; }
+button.primary { margin-top: 12px; }
 button.danger { width: 100%; margin-top: 15px; border-color: #5a343a; color: #ffb7bf; background: #342226; }
 
 label, .eyebrow {
@@ -112,7 +113,27 @@ input:focus { border-color: #f47521; box-shadow: 0 0 0 3px rgba(244, 117, 33, 0.
 
 .participants { display: flex; align-items: center; gap: 7px; font-size: 13px; }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: #52d587; box-shadow: 0 0 0 4px rgba(82, 213, 135, 0.1); }
+.participant-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.participant-chip { padding: 5px 8px; border-radius: 999px; color: #dcd6e0; background: #332d38; font-size: 11px; }
+.participant-chip.self { color: #1b1110; background: #f47521; font-weight: 800; }
 .muted { margin: 12px 0 0; color: #a7a0ac; font-size: 12px; line-height: 1.45; }
+
+.history-panel { margin-top: 14px; }
+.history-heading { display: flex; justify-content: space-between; align-items: center; }
+.history-heading .eyebrow { margin: 0; }
+#history-count { color: #736d78; font-size: 10px; }
+.history {
+  max-height: 210px;
+  margin: 9px 0 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+  border-top: 1px solid #302a35;
+}
+.history li { display: grid; grid-template-columns: 42px 1fr; gap: 8px; padding: 9px 2px; border-bottom: 1px solid #29242d; font-size: 11px; }
+.history time { color: #746d79; font-variant-numeric: tabular-nums; }
+.history strong { color: #e7e2e9; }
+.history .detail { color: #9d95a2; }
 
 .error { margin: 11px 2px 0; color: #ff9da7; font-size: 12px; }
 .hidden { display: none !important; }

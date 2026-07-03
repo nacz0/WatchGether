@@ -7,9 +7,33 @@ export interface PlaybackState {
   updatedAt: number;
 }
 
+export interface Participant {
+  clientId: string;
+  nickname: string;
+}
+
+export type ActivityEvent =
+  | {
+      id: string;
+      type: "participant_joined" | "participant_left";
+      actorClientId: string;
+      nickname: string;
+      createdAt: number;
+    }
+  | {
+      id: string;
+      type: "playback";
+      actorClientId: string;
+      nickname: string;
+      action: Exclude<PlaybackAction, "sync">;
+      currentTime: number;
+      playbackRate: number;
+      createdAt: number;
+    };
+
 export type ClientMessage =
-  | { type: "create_room" }
-  | { type: "join_room"; roomCode: string }
+  | { type: "create_room"; nickname: string }
+  | { type: "join_room"; roomCode: string; nickname: string }
   | {
       type: "playback";
       action: PlaybackAction;
@@ -25,10 +49,14 @@ export type ServerMessage =
       type: "room_joined";
       roomCode: string;
       role: "host" | "guest";
+      clientId: string;
       participantCount: number;
+      participants: Participant[];
+      history: ActivityEvent[];
       state: PlaybackState | null;
     }
-  | { type: "participant_count"; participantCount: number }
+  | { type: "participants"; participants: Participant[] }
+  | { type: "activity"; event: ActivityEvent }
   | {
       type: "playback";
       action: PlaybackAction;
@@ -51,11 +79,14 @@ export function parseClientMessage(raw: string): ClientMessage | null {
 
   switch (value.type) {
     case "create_room":
+      return validNickname(value.nickname)
+        ? { type: "create_room", nickname: value.nickname.trim() }
+        : null;
     case "leave_room":
-      return { type: value.type };
+      return { type: "leave_room" };
     case "join_room":
-      return typeof value.roomCode === "string"
-        ? { type: "join_room", roomCode: value.roomCode }
+      return typeof value.roomCode === "string" && validNickname(value.nickname)
+        ? { type: "join_room", roomCode: value.roomCode, nickname: value.nickname.trim() }
         : null;
     case "ping":
       return finiteNumber(value.sentAt)
@@ -92,4 +123,8 @@ function finiteNumber(value: unknown): value is number {
 
 function isPlaybackAction(value: unknown): value is PlaybackAction {
   return ["play", "pause", "seek", "rate", "sync"].includes(String(value));
+}
+
+function validNickname(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length >= 2 && value.trim().length <= 20;
 }
