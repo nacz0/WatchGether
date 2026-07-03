@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "WatchGether for Crunchyroll",
+  "description": "Synchronizuje odtwarzanie Crunchyrolla między dwiema osobami.",
+  "version": "0.1.0",
+  "permissions": ["storage", "activeTab"],
+  "host_permissions": ["https://www.crunchyroll.com/*"],
+  "action": {
+    "default_title": "WatchGether",
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.crunchyroll.com/*"],
+      "js": ["assets/content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

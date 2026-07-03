@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="pl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WatchGether</title>
+    <link rel="stylesheet" href="/src/popup.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <div class="mark">W</div>
+        <div>
+          <h1>WatchGether</h1>
+          <p>Crunchyroll · 2 osoby</p>
+        </div>
+      </header>
+
+      <section id="unsupported" class="panel hidden">
+        <strong>Otwórz Crunchyroll</strong>
+        <p>Rozszerzenie działa na karcie crunchyroll.com.</p>
+      </section>
+
+      <section id="disconnected" class="panel hidden">
+        <div id="player-status" class="status warning">Szukam odtwarzacza…</div>
+        <button id="create" class="primary">Utwórz pokój</button>
+        <div class="divider"><span>lub</span></div>
+        <label for="room-code">Kod pokoju</label>
+        <div class="join-row">
+          <input id="room-code" maxlength="6" autocomplete="off" placeholder="ABC123" />
+          <button id="join">Dołącz</button>
+        </div>
+      </section>
+
+      <section id="connected" class="panel hidden">
+        <span class="eyebrow">Kod pokoju</span>
+        <button id="copy-code" class="room-code" title="Skopiuj kod"></button>
+        <div class="participants">
+          <span class="dot"></span>
+          <span id="participant-count">1 z 2 osób</span>
+        </div>
+        <p id="role-description" class="muted"></p>
+        <button id="leave" class="danger">Opuść pokój</button>
+      </section>
+
+      <p id="error" class="error hidden"></p>
+
+      <details>
+        <summary>Ustawienia serwera</summary>
+        <label for="server-url">Adres WebSocket</label>
+        <input id="server-url" type="url" spellcheck="false" />
+      </details>
+    </main>
+    <script type="module" src="/src/popup.ts"></script>
+  </body>
+</html>
